@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Call Summarizer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f0f13;
+      color: #e8e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 16px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #7c6fef, #4fc3f7);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    header p {
+      color: #888;
+      margin-top: 8px;
+      font-size: 0.95rem;
+    }
+
+    .card {
+      background: #1a1a24;
+      border: 1px solid #2a2a38;
+      border-radius: 16px;
+      padding: 32px;
+      width: 100%;
+      max-width: 680px;
+      margin-bottom: 24px;
+    }
+
+    .drop-zone {
+      border: 2px dashed #3a3a52;
+      border-radius: 12px;
+      padding: 48px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: #7c6fef;
+      background: #1e1e2e;
+    }
+
+    .drop-zone input[type="file"] { display: none; }
+
+    .drop-zone svg {
+      width: 48px; height: 48px;
+      stroke: #7c6fef;
+      margin-bottom: 16px;
+    }
+
+    .drop-zone p { color: #aaa; font-size: 0.9rem; }
+    .drop-zone p span { color: #7c6fef; font-weight: 600; }
+    .drop-zone .filename { color: #e8e8f0; margin-top: 8px; font-size: 0.85rem; }
+
+    button#analyzeBtn {
+      width: 100%;
+      margin-top: 20px;
+      padding: 14px;
+      background: linear-gradient(135deg, #7c6fef, #4fc3f7);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    button#analyzeBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+    button#analyzeBtn:hover:not(:disabled) { opacity: 0.9; }
+
+    #status {
+      text-align: center;
+      color: #888;
+      font-size: 0.9rem;
+      min-height: 20px;
+      margin-top: 12px;
+    }
+
+    #status.error { color: #f87171; }
+
+    .results { display: none; }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .badge.positive { background: #14532d; color: #4ade80; }
+    .badge.negative { background: #450a0a; color: #f87171; }
+    .badge.neutral  { background: #1e3a5f; color: #60a5fa; }
+    .badge.mixed    { background: #3b1f00; color: #fb923c; }
+
+    .section-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #666;
+      margin-bottom: 10px;
+    }
+
+    .summary-text {
+      color: #ccc;
+      line-height: 1.6;
+      font-size: 0.95rem;
+    }
+
+    ul.points {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    ul.points li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      color: #ccc;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    ul.points li::before {
+      content: "";
+      display: block;
+      min-width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #7c6fef;
+      margin-top: 6px;
+    }
+
+    ul.points.action li::before { background: #4fc3f7; }
+
+    .meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+
+    .meta span { color: #666; font-size: 0.85rem; }
+
+    details {
+      border: 1px solid #2a2a38;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    details summary {
+      padding: 14px 18px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      color: #888;
+      user-select: none;
+      list-style: none;
+    }
+
+    details summary:hover { color: #bbb; }
+
+    details .transcript-body {
+      padding: 16px 18px;
+      border-top: 1px solid #2a2a38;
+      color: #999;
+      font-size: 0.85rem;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid #2a2a38;
+      margin: 20px 0;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>AI Call Summarizer</h1>
+  <p>Upload a business call recording and get instant insights.</p>
+</header>
+
+<div class="card">
+  <div class="drop-zone" id="dropZone">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 16V4m0 0L8 8m4-4 4 4"/>
+      <path d="M20 16.5A4.5 4.5 0 0 1 15.5 21h-7A4.5 4.5 0 0 1 4 16.5"/>
+    </svg>
+    <p><span>Click to upload</span> or drag and drop</p>
+    <p>MP3, WAV, M4A, OGG, FLAC, WEBM</p>
+    <p class="filename" id="fileName"></p>
+    <input type="file" id="fileInput" accept=".mp3,.wav,.m4a,.ogg,.flac,.webm" />
+  </div>
+
+  <button id="analyzeBtn" disabled>Analyze Call</button>
+  <div id="status"></div>
+</div>
+
+<div class="card results" id="results">
+  <div class="meta">
+    <span id="durationLabel"></span>
+    <span id="sentimentBadge"></span>
+  </div>
+
+  <div class="section-title">Summary</div>
+  <p class="summary-text" id="summaryText"></p>
+
+  <hr class="divider" />
+
+  <div class="section-title">Key Points</div>
+  <ul class="points" id="keyPoints"></ul>
+
+  <div id="actionSection" style="display:none">
+    <hr class="divider" />
+    <div class="section-title">Action Items</div>
+    <ul class="points action" id="actionItems"></ul>
+  </div>
+
+  <hr class="divider" />
+
+  <details>
+    <summary>Full Transcript</summary>
+    <div class="transcript-body" id="transcriptBody"></div>
+  </details>
+</div>
+
+<script>
+  const dropZone = document.getElementById("dropZone");
+  const fileInput = document.getElementById("fileInput");
+  const fileNameEl = document.getElementById("fileName");
+  const analyzeBtn = document.getElementById("analyzeBtn");
+  const statusEl = document.getElementById("status");
+  const resultsEl = document.getElementById("results");
+
+  let selectedFile = null;
+
+  dropZone.addEventListener("click", () => fileInput.click());
+
+  dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("drag-over"); });
+  dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
+  dropZone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropZone.classList.remove("drag-over");
+    const f = e.dataTransfer.files[0];
+    if (f) setFile(f);
+  });
+
+  fileInput.addEventListener("change", () => {
+    if (fileInput.files[0]) setFile(fileInput.files[0]);
+  });
+
+  function setFile(f) {
+    selectedFile = f;
+    fileNameEl.textContent = f.name;
+    analyzeBtn.disabled = false;
+    statusEl.textContent = "";
+    statusEl.className = "";
+    resultsEl.style.display = "none";
+  }
+
+  analyzeBtn.addEventListener("click", async () => {
+    if (!selectedFile) return;
+
+    analyzeBtn.disabled = true;
+    statusEl.className = "";
+    statusEl.textContent = "Transcribing audio... this may take a moment.";
+    resultsEl.style.display = "none";
+
+    const form = new FormData();
+    form.append("file", selectedFile);
+
+    try {
+      const res = await fetch("/summarize", { method: "POST", body: form });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: "Unknown error" }));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      renderResults(data);
+      statusEl.textContent = "";
+    } catch (e) {
+      statusEl.className = "error";
+      statusEl.textContent = "Error: " + e.message;
+    } finally {
+      analyzeBtn.disabled = false;
+    }
+  });
+
+  function formatDuration(secs) {
+    const m = Math.floor(secs / 60);
+    const s = Math.round(secs % 60);
+    return m > 0 ? `${m}m ${s}s` : `${s}s`;
+  }
+
+  function renderResults(data) {
+    document.getElementById("durationLabel").textContent = `Duration: ${formatDuration(data.duration_seconds)}`;
+
+    const badge = document.getElementById("sentimentBadge");
+    badge.className = `badge ${data.sentiment}`;
+    badge.textContent = data.sentiment;
+
+    document.getElementById("summaryText").textContent = data.summary;
+
+    const kpEl = document.getElementById("keyPoints");
+    kpEl.innerHTML = data.key_points.map(p => `<li>${p}</li>`).join("");
+
+    const aiEl = document.getElementById("actionItems");
+    if (data.action_items.length > 0) {
+      aiEl.innerHTML = data.action_items.map(a => `<li>${a}</li>`).join("");
+      document.getElementById("actionSection").style.display = "block";
+    } else {
+      document.getElementById("actionSection").style.display = "none";
+    }
+
+    document.getElementById("transcriptBody").textContent = data.transcript;
+
+    resultsEl.style.display = "block";
+    resultsEl.scrollIntoView({ behavior: "smooth" });
+  }
+</script>
+</body>
+</html>
