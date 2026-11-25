@@ -1,16 +1,8 @@
-import os
 import json
-import anthropic
+import requests
 
-_client = None
-
-
-def _get_client():
-    global _client
-    if _client is None:
-        _client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    return _client
-
+OLLAMA_URL = "http://localhost:11434/api/chat"
+MODEL = "llama3.2"
 
 SYSTEM_PROMPT = """You are a business call analysis assistant. Given a call transcript, return a JSON object with:
 - summary: 2-3 sentence overview of the call
@@ -22,21 +14,19 @@ Respond ONLY with valid JSON, no extra text."""
 
 
 def analyze(transcript: str) -> dict:
-    client = _get_client()
-
-    message = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=1024,
-        system=SYSTEM_PROMPT,
-        messages=[
-            {
-                "role": "user",
-                "content": f"Transcript:\n\n{transcript}",
-            }
+    payload = {
+        "model": MODEL,
+        "stream": False,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": f"Transcript:\n\n{transcript}"},
         ],
-    )
+    }
 
-    raw = message.content[0].text.strip()
+    response = requests.post(OLLAMA_URL, json=payload, timeout=120)
+    response.raise_for_status()
+
+    raw = response.json()["message"]["content"].strip()
 
     # Strip markdown code fences if present
     if raw.startswith("```"):
